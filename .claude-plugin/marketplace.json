@@ -1,0 +1,15 @@
+{
+  "name": "spelflow-skills",
+  "description": "Claude Code skills for working with Spelflow Tracker (spelflow.ru)",
+  "owner": {
+    "name": "BabylenMagnus"
+  },
+  "plugins": [
+    {
+      "name": "spelflow-skills",
+      "description": "Spelflow Tracker skills: REST API client (spelflow-loader) and epic-to-backlog PM pipeline orchestrator (spelflow-plan)",
+      "version": "1.0.0",
+      "source": "./"
+    }
+  ]
+}

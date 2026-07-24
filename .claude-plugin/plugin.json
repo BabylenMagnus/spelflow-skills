@@ -1,0 +1,13 @@
+{
+  "name": "spelflow-skills",
+  "description": "Spelflow Tracker skills: REST API client (spelflow-loader) and epic-to-backlog PM pipeline orchestrator (spelflow-plan)",
+  "version": "1.0.0",
+  "homepage": "https://github.com/BabylenMagnus/spelflow-skills",
+  "repository": "https://github.com/BabylenMagnus/spelflow-skills",
+  "keywords": [
+    "spelflow",
+    "skills",
+    "pm",
+    "tracker"
+  ]
+}
