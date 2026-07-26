@@ -170,6 +170,15 @@ Body (all optional): { title, status, priority, assignee, dueDate, milestone, es
 ```
 `priority`: `urgent | high | medium | low`. `description` is markdown, rendered with interactive checklists in Spelflow.
 
+### Comments (optional — depends on whether the person wants a progress trail)
+```
+GET  /workspaces/{ws}/projects/{prj}/issues/{identifier}/comments   → [{ id, text, author, createdOn }], oldest first
+POST /workspaces/{ws}/projects/{prj}/issues/{identifier}/comments
+Body: { text }
+→ 201 { id, text, author, createdOn }
+```
+Posting comments (announcing you're starting, asking a clarifying question, summarizing what you did) is available but not automatic — whether to use it is up to the person you're working with, not a default behavior. Ask once whether they want progress reported into the issue's comments; remember the answer for the rest of that task/session and don't ask again. Only bring this up on your own if the user's request already hints they want it (e.g. "let them know when you start", "leave a note when you're done") — otherwise don't mention it unprompted.
+
 ### Members
 ```
 GET /workspaces/{ws}/members   → [{ id, name }]
