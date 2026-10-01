@@ -141,11 +141,26 @@ Confirmed against `server/account-service/src/index.ts:637-691` (spelflow-app re
 
 ### Projects
 ```
-GET  /workspaces/{ws}/projects                        → [{ id, name, identifier }]
-POST /workspaces/{ws}/projects
+GET   /workspaces/{ws}/projects                        → [{ id, name, identifier }]
+POST  /workspaces/{ws}/projects
 Body: { name, identifier, description?, private?, autoJoin? }
 → 201 { id, name, identifier, description, private, archived }
 → 409 if identifier already exists
+
+PATCH /workspaces/{ws}/projects/{prj}
+Body: { archived: true|false }
+→ 200 { ok: true, identifier, archived }
+Archives (or unarchives) the whole project. Reversible — PATCH again with archived:false to bring it back.
+Archiving a project hides it (and every issue inside it) from default GET listings — GET .../projects and
+GET .../issues no longer return them until unarchived. There is no per-issue archive; see "Deleting vs
+Archiving" below.
+
+DELETE /workspaces/{ws}/projects/{prj}
+Body (optional): { force?: true }
+→ 200 { ok: true, identifier, deletedIssues }
+→ 400 if the project has issues and `force` wasn't passed — response names the issue count
+Deletes the project permanently. **Irreversible.** A non-empty project refuses to delete unless `force: true`
+is sent, in which case every issue inside it is deleted first, then the project itself.
 ```
 `identifier` = short uppercase prefix (e.g. "TSK" → issues become `TSK-1`, `TSK-2`...). Project type, default status (`Backlog`), and time-report settings are fixed to Spelflow UI defaults — not customizable via this endpoint.
 
@@ -164,20 +179,29 @@ GET   /workspaces/{ws}/projects/{prj}/issues/{identifier}   → single issue (id
 POST  /workspaces/{ws}/issues
 Body: { title, project, priority?, description?, dueDate?, status?, milestone?, assignee?, estimation? }
 → 201 { id, identifier, project, title, description, status, priority, dueDate, milestone, assignee, estimation }
-PATCH /workspaces/{ws}/projects/{prj}/issues/{identifier}
+PATCH  /workspaces/{ws}/projects/{prj}/issues/{identifier}
 Body (all optional): { title, status, priority, assignee, dueDate, milestone, estimation, description }
 → 200 { ok: true, identifier }
+DELETE /workspaces/{ws}/projects/{prj}/issues/{identifier}
+→ 200 { ok: true, identifier }
+→ 404 if not found
+Permanently deletes the issue. **Irreversible** — this is a real `TxRemoveDoc`, not a soft-delete or status
+change; there is no undo and no trash/recycle bin. Confirm with the user before calling this on anything
+they didn't explicitly ask to delete.
 ```
 `priority`: `urgent | high | medium | low`. `description` is markdown, rendered with interactive checklists in Spelflow.
 
-### Comments (optional — depends on whether the person wants a progress trail)
-```
-GET  /workspaces/{ws}/projects/{prj}/issues/{identifier}/comments   → [{ id, text, author, createdOn }], oldest first
-POST /workspaces/{ws}/projects/{prj}/issues/{identifier}/comments
-Body: { text }
-→ 201 { id, text, author, createdOn }
-```
-Posting comments (announcing you're starting, asking a clarifying question, summarizing what you did) is available but not automatic — whether to use it is up to the person you're working with, not a default behavior. Ask once whether they want progress reported into the issue's comments; remember the answer for the rest of that task/session and don't ask again. Only bring this up on your own if the user's request already hints they want it (e.g. "let them know when you start", "leave a note when you're done") — otherwise don't mention it unprompted.
+### Deleting vs Archiving — decision logic (read before acting on any "delete"/"archive" request)
+
+Archiving is a **project-level concept only** — Spelflow's data model has no per-issue archive field, and never will (confirmed against the Huly Tracker schema, 2026-08-22). Don't blur the two:
+
+| User says | Do this |
+|---|---|
+| "Delete issue X" / "удали задачу X" | Always `DELETE .../issues/{identifier}`, immediately. Never redirect this into an archive suggestion — if they said delete, delete. |
+| "Archive project X" / "заархивируй проект X" | `PATCH .../projects/{prj}` with `{archived: true}` — direct, no ambiguity. |
+| "Archive issue X" / "заархивируй задачу X" (a single issue, not a project) | **Not possible as a 1:1 operation**, and the "move it to a separate archive project" workaround is **not currently implementable via this API either** — moving an issue between projects isn't a simple field update (Huly's own `moveIssueToSpace` handles component/milestone remapping, sub-issue reparenting, and renumbering under the target project's sequence; the REST API's PATCH doesn't expose a `project` field and doesn't do any of that). So today the only real option is: tell the user archive only exists at the project level, and offer to archive the *entire* project this issue lives in if the rest of it is also stale (`PATCH .../projects/{prj} {"archived": true}`). If they want just one issue moved without archiving the rest, be honest that this isn't supported yet — don't fake it with a partial PATCH that silently does nothing. |
+
+If in doubt which the user means, ask — don't guess between delete and archive; they have very different blast radii (one is permanent, the other is reversible).
 
 ### Members
 ```
@@ -189,9 +213,13 @@ GET /workspaces/{ws}/members   → [{ id, name }]
 |------|---------|
 | 401 | Token invalid/expired/revoked |
 | 404 | Workspace, project, or issue not found |
-| 400 | Missing required field (title/project for issues, label for milestones, name/identifier for projects) |
+| 400 | Missing required field (title/project for issues, label for milestones, name/identifier for projects); or `DELETE .../projects/{prj}` on a non-empty project without `force: true` |
 | 409 | Project identifier already exists |
 | 500 | Account has no verified social IDs |
+
+### DELETE is permanent — no confirmation built into the API, so build it into your own behavior
+
+`DELETE .../issues/{identifier}` and `DELETE .../projects/{prj}` are real removals (`TxRemoveDoc`) — no trash, no undo, no soft-delete. The API itself does not ask for confirmation; that responsibility falls on whoever calls it. Never call either DELETE endpoint as a guess or a "probably what they meant" — only on an explicit, unambiguous delete request from the user, same bar as any other irreversible action. `DELETE .../projects/{prj} {"force": true}` is worse than the issue-level DELETE: it wipes every issue in the project too, so treat `force` as its own separate confirmation, not implied by "delete the project."
 
 ### Cyrillic / non-ASCII encoding — critical for every write
 
